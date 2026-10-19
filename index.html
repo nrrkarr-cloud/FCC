@@ -143,9 +143,8 @@
         function buildFCC() {
             clearGroup();
             const R = 0.35;
-            const a = 2 * Math.sqrt(2) * R; // Sert küre çakışma bağıntısı
+            const a = 2 * Math.sqrt(2) * R;
 
-            // Birim hücre sınır düzlemleri (Clipping Planes)
             const half = a / 2;
             const planes = [
                 new THREE.Plane(new THREE.Vector3(1, 0, 0), half),
@@ -156,15 +155,13 @@
                 new THREE.Plane(new THREE.Vector3(0, 0, -1), half)
             ];
 
-            // Çerçeve
             currentGroup.add(createUnitCellWireframe(a, a, a));
 
-            // Atom Konumları (Köşeler + Yüzey Merkezleri)
             const positions = [
-                // Köşeler (8 adet)
+                // Köşeler
                 [-half, -half, -half], [half, -half, -half], [-half, half, -half], [half, half, -half],
                 [-half, -half, half],  [half, -half, half],  [-half, half, half],  [half, half, half],
-                // Yüzey Merkezleri (6 adet)
+                // Yüzey Merkezleri
                 [0, 0, half], [0, 0, -half],
                 [0, half, 0], [0, -half, 0],
                 [half, 0, 0], [-half, 0, 0]
@@ -206,72 +203,114 @@
             });
         }
 
-// --- HCP Yapısı (Kırpma Düzlemleri Eklenmiş) ---
-function buildHCP() {
-    clearGroup();
-    const R = 0.35;
-    const a = 2 * R;
-    const c = a * Math.sqrt(8/3);
+        // --- HCP Yapısı ---
+        function buildHCP() {
+            clearGroup();
+            const R = 0.35;
+            const a = 2 * R;
+            const c = a * Math.sqrt(8/3);
 
-    // Altıgen Prizmanın 8 Sınır Düzlemi (Clipping Planes)
-    const planes = [
-        // Üst ve Alt Düzlemler
-        new THREE.Plane(new THREE.Vector3(0, -1, 0), c / 2),
-        new THREE.Plane(new THREE.Vector3(0, 1, 0), c / 2)
-    ];
+            // Altıgen Prizmanın 8 Sınır Düzlemi (Clipping Planes)
+            const planes = [
+                // Üst ve Alt Düzlemler
+                new THREE.Plane(new THREE.Vector3(0, -1, 0), c / 2),
+                new THREE.Plane(new THREE.Vector3(0, 1, 0), c / 2)
+            ];
 
-    // 6 Yan Yüzey Düzlemi (Apothem mesafesi: a * sqrt(3) / 2)
-    const apothem = (a * Math.sqrt(3)) / 2;
-    for (let i = 0; i < 6; i++) {
-        const angle = (i * Math.PI) / 3 + Math.PI / 6;
-        const normal = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
-        planes.push(new THREE.Plane(normal, apothem));
-    }
+            // 6 Yan Yüzey Düzlemi
+            const apothem = (a * Math.sqrt(3)) / 2;
+            for (let i = 0; i < 6; i++) {
+                const angle = (i * Math.PI) / 3 + Math.PI / 6;
+                const normal = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
+                planes.push(new THREE.Plane(normal, apothem));
+            }
 
-    // Altıgen Prizma Tel Çerçevesi
-    const hexGroup = new THREE.Group();
-    const wireMat = new THREE.LineBasicMaterial({ color: 0xaaaaaa });
+            // Altıgen Prizma Tel Çerçevesi
+            const hexGroup = new THREE.Group();
+            const wireMat = new THREE.LineBasicMaterial({ color: 0xaaaaaa });
 
-    for (let layer of [-c/2, c/2]) {
-        const pts = [];
-        for (let i = 0; i <= 6; i++) {
-            const angle = (i * Math.PI) / 3;
-            pts.push(new THREE.Vector3(a * Math.cos(angle), layer, a * Math.sin(angle)));
+            for (let layer of [-c/2, c/2]) {
+                const pts = [];
+                for (let i = 0; i <= 6; i++) {
+                    const angle = (i * Math.PI) / 3;
+                    pts.push(new THREE.Vector3(a * Math.cos(angle), layer, a * Math.sin(angle)));
+                }
+                const hexGeo = new THREE.BufferGeometry().setFromPoints(pts);
+                hexGroup.add(new THREE.Line(hexGeo, wireMat));
+            }
+
+            for (let i = 0; i < 6; i++) {
+                const angle = (i * Math.PI) / 3;
+                const x = a * Math.cos(angle);
+                const z = a * Math.sin(angle);
+                const lineGeo = new THREE.BufferGeometry().setFromPoints([
+                    new THREE.Vector3(x, -c/2, z),
+                    new THREE.Vector3(x, c/2, z)
+                ]);
+                hexGroup.add(new THREE.Line(lineGeo, wireMat));
+            }
+            currentGroup.add(hexGroup);
+
+            // Atom Pozisyonları
+            const positions = [];
+            // Alt ve üst katmanlar (Köşeler + Taban Merkezleri)
+            for (let layer of [-c/2, c/2]) {
+                positions.push([0, layer, 0]);
+                for (let i = 0; i < 6; i++) {
+                    const angle = (i * Math.PI) / 3;
+                    positions.push([a * Math.cos(angle), layer, a * Math.sin(angle)]);
+                }
+            }
+            // İç katmandaki 3 atom
+            const r_mid = a / Math.sqrt(3);
+            positions.push([r_mid * Math.cos(Math.PI/6), 0, r_mid * Math.sin(Math.PI/6)]);
+            positions.push([r_mid * Math.cos(5*Math.PI/6), 0, r_mid * Math.sin(5*Math.PI/6)]);
+            positions.push([r_mid * Math.cos(3*Math.PI/2), 0, r_mid * Math.sin(3*Math.PI/2)]);
+
+            // Atomları kırpma düzlemleri ile oluşturma
+            positions.forEach(pos => {
+                currentGroup.add(createAtomWithClipping(pos[0], pos[1], pos[2], R, planes));
+            });
         }
-        const hexGeo = new THREE.BufferGeometry().setFromPoints(pts);
-        hexGroup.add(new THREE.Line(hexGeo, wireMat));
-    }
 
-    for (let i = 0; i < 6; i++) {
-        const angle = (i * Math.PI) / 3;
-        const x = a * Math.cos(angle);
-        const z = a * Math.sin(angle);
-        const lineGeo = new THREE.BufferGeometry().setFromPoints([
-            new THREE.Vector3(x, -c/2, z),
-            new THREE.Vector3(x, c/2, z)
-        ]);
-        hexGroup.add(new THREE.Line(lineGeo, wireMat));
-    }
-    currentGroup.add(hexGroup);
-
-    // Atom Pozisyonları
-    const positions = [];
-    // Alt ve üst katmanlar (Köşeler + Taban Merkezleri)
-    for (let layer of [-c/2, c/2]) {
-        positions.push([0, layer, 0]);
-        for (let i = 0; i < 6; i++) {
-            const angle = (i * Math.PI) / 3;
-            positions.push([a * Math.cos(angle), layer, a * Math.sin(angle)]);
+        function clearGroup() {
+            while (currentGroup.children.length > 0) {
+                const obj = currentGroup.children[0];
+                currentGroup.remove(obj);
+            }
         }
-    }
-    // İç katmandaki 3 atom
-    const r_mid = a / Math.sqrt(3);
-    positions.push([r_mid * Math.cos(Math.PI/6), 0, r_mid * Math.sin(Math.PI/6)]);
-    positions.push([r_mid * Math.cos(5*Math.PI/6), 0, r_mid * Math.sin(5*Math.PI/6)]);
-    positions.push([r_mid * Math.cos(3*Math.PI/2), 0, r_mid * Math.sin(3*Math.PI/2)]);
 
-    // Atomları kırpma düzlemleri ile oluşturma
-    positions.forEach(pos => {
-        currentGroup.add(createAtomWithClipping(pos[0], pos[1], pos[2], R, planes));
-    });
-}
+        function switchStructure(type) {
+            document.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
+            
+            if (type === 'FCC') {
+                document.getElementById('btnFCC').classList.add('active');
+                document.getElementById('info').innerText = 'Yüzey Merkezli Kübik (FCC) Yapı';
+                buildFCC();
+            } else if (type === 'BCC') {
+                document.getElementById('btnBCC').classList.add('active');
+                document.getElementById('info').innerText = 'Hacim Merkezli Kübik (BCC) Yapı';
+                buildBCC();
+            } else if (type === 'HCP') {
+                document.getElementById('btnHCP').classList.add('active');
+                document.getElementById('info').innerText = 'Sık Düzen Altıgen (HCP) Yapı';
+                buildHCP();
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        init();
+    </script>
+</body>
+</html>
